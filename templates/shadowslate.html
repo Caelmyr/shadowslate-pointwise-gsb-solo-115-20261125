@@ -53,17 +53,18 @@
       </section>
       <section class="panel profile">
         <div class="panel-head">
-          <div><h2>原片亮度截线</h2><span>原片 X · px</span></div>
-          <span class="legend"><i></i> 暗区阈值</span>
+          <div><h2>原片亮度截线</h2><span>原片 X · px · 显示真实源亮度</span></div>
+          <span class="legend"><i id="legend-mark"></i> <span id="legend-text">暗区阈值</span></span>
         </div>
         <canvas id="chart" width="850" height="166" aria-label="当前截线的实际像素亮度"></canvas>
       </section>
     </div>
     <aside class="right">
       <section class="panel readout">
-        <div class="panel-head"><h2>框内暗区覆盖</h2><span id="measurement-state"></span></div>
+        <div class="panel-head"><h2 id="cover-title">框内暗区覆盖</h2><span id="measurement-state"></span></div>
         <div class="volume"><strong id="cover-value">—</strong><span id="cover-unit"></span></div>
         <p id="selected-level"></p>
+        <p id="pending-line" class="pending-line" hidden></p>
       </section>
       <form id="calibration" class="panel settings">
         <div class="panel-head"><div><h2>测量框和标尺</h2><span>坐标使用原片像素，X 向右，Y 向下</span></div></div>
@@ -75,8 +76,14 @@
           <label>上界 Y<input data-setting="top" type="number" step="1" min="0" required></label>
           <label>下界 Y<input data-setting="bottom" type="number" step="1" min="0" required></label>
         </div></fieldset>
+        <fieldset><legend>判断方式</legend><div class="form-grid method-grid">
+          <label class="choice"><input type="radio" name="method" data-setting="method" value="threshold"> 全框亮度阈</label>
+          <label class="choice"><input type="radio" name="method" data-setting="method" value="reference"> 同列纸色参照</label>
+        </div>
+        <p id="method-hint" class="field-hint"></p></fieldset>
         <fieldset><legend>亮度和比例</legend><div class="form-grid">
-          <label>暗区亮度上限<input data-setting="cutoff" type="number" step="1" min="1" max="254" required></label>
+          <label id="cutoff-label">暗区亮度上限<input data-setting="cutoff" type="number" step="1" min="1" max="254" required></label>
+          <label id="ratio-label">阴影比例（低于）<input data-setting="ratio" type="number" step="0.01" min="0.01" max="0.99" required></label>
           <label>标尺 mm/px<input data-setting="mm_per_px" type="number" step="any" min="0.001" required></label>
         </div></fieldset>
         <button id="save" class="primary" type="submit">保存并测量</button>

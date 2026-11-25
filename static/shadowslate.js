@@ -2,7 +2,28 @@
 
 const get = (id) => document.getElementById(id);
 const state = {card: null, result: null, photo: null, probe: null, mode: "probe", busy: false};
-const settings = [...document.querySelectorAll("[data-setting]")];
+const settings = [...document.querySelectorAll("[data-setting]:not([type=radio])")];
+const methodRadios = [...document.querySelectorAll("input[name=method]")];
+
+function currentMethod() {
+  return methodRadios.find((radio) => radio.checked)?.value || "threshold";
+}
+
+function methodHint(method) {
+  if (method === "reference") {
+    return "框最上、最下各 8 行作同列参照纸条；每列只用本列上下条原片像素，两条各至少 4 个 RGB 三通道在 1–254 的实拍像素，不足的列标待核、不借旁列。中间亮度 ÷ 当地纸色低于比例才记阴影。";
+  }
+  return "原全框亮度阈：框内原片亮度不超过上限即记为暗区，可随时切回。";
+}
+
+function applyMethodUI() {
+  const method = currentMethod();
+  get("cutoff-label").hidden = method !== "threshold";
+  get("ratio-label").hidden = method !== "reference";
+  get("method-hint").textContent = methodHint(method);
+  get("cover-title").textContent = method === "reference" ? "框内阴影覆盖" : "框内暗区覆盖";
+  get("legend-text").textContent = method === "reference" ? "各列当地纸色 × 比例" : "暗区阈值";
+}
 
 async function api(path, options) {
   const response = await fetch("/shadowslate" + path, options);
@@ -63,6 +84,17 @@ function paintSource() {
   ctx.setLineDash([6,5]);
   ctx.strokeRect(cfg.left,cfg.top,cfg.right-cfg.left,cfg.bottom-cfg.top);
   ctx.setLineDash([]);
+  if (cfg.method === "reference" && result.reference) {
+    const info = result.reference;
+    ctx.strokeStyle = "rgba(74,168,178,.95)";
+    ctx.lineWidth = 1;
+    ctx.strokeRect(cfg.left, info.top[0], cfg.right-cfg.left, info.strip_rows-1);
+    ctx.strokeRect(cfg.left, info.bottom[0], cfg.right-cfg.left, info.strip_rows-1);
+    ctx.fillStyle = "rgba(223,158,74,.5)";
+    for (const [x, col] of Object.entries(info.columns)) {
+      if (!col.usable) ctx.fillRect(Number(x), cfg.top, 1, cfg.bottom-cfg.top+1);
+    }
+  }
   if (result.profile.length) {
     ctx.strokeStyle = "#db9b4d";
     ctx.beginPath();
@@ -99,6 +131,12 @@ function paintChart() {
   for (const [left,right] of result.ranges) {
     ctx.fillRect(xAt(left),yAt(255),Math.max(2,xAt(right)-xAt(left)),yAt(0)-yAt(255));
   }
+  if (cfg.method === "reference") {
+    ctx.fillStyle = "rgba(223,158,74,.28)";
+    for (const p of result.profile) {
+      if (p.pending) ctx.fillRect(xAt(p.x),yAt(255),Math.max(2,(width-76)/Math.max(1,result.profile.length)),yAt(0)-yAt(255));
+    }
+  }
   ctx.font = "12px monospace";
   ctx.fillStyle = "#695e68";
   ctx.strokeStyle = "#ded3df";
@@ -122,16 +160,29 @@ function paintChart() {
   ctx.strokeStyle = "#be8c52";
   ctx.setLineDash([6,4]);
   ctx.beginPath();
-  ctx.moveTo(xAt(cfg.left),yAt(cfg.cutoff));
-  ctx.lineTo(xAt(cfg.right),yAt(cfg.cutoff));
+  if (cfg.method === "reference") {
+    // 每个可用列各自的当地纸色 × 比例；截线本身仍是真实源亮度。
+    let started = false;
+    for (const p of result.profile) {
+      if (p.reference === null) { started = false; continue; }
+      const level = p.reference * cfg.ratio;
+      if (!started) { ctx.moveTo(xAt(p.x), yAt(level)); started = true; }
+      else ctx.lineTo(xAt(p.x), yAt(level));
+    }
+  } else {
+    ctx.moveTo(xAt(cfg.left),yAt(cfg.cutoff));
+    ctx.lineTo(xAt(cfg.right),yAt(cfg.cutoff));
+  }
   ctx.stroke();
   ctx.setLineDash([]);
 }
 
 function pointLabel(point) {
-  const kind = point.dark === null ? "框外" : (point.dark ? "暗区" : "亮区");
-  return "(" + point.x + ", " + point.y + ") · RGB " + point.rgb.join("/") +
-    " · " + point.brightness.toFixed(1) + " · " + kind;
+  const base = "(" + point.x + ", " + point.y + ") · RGB " + point.rgb.join("/") +
+    " · " + point.brightness.toFixed(1) + " · " + point.status;
+  if (point.status === "框外" || point.reference === null) return base;
+  return base + " · 参照 " + point.reference.toFixed(1) +
+    " · 比例 " + point.ratio_value.toFixed(3);
 }
 
 function show() {
@@ -143,6 +194,8 @@ function show() {
   get("dimensions").textContent = card.width + " × " + card.height + " px · " + card.photo_name;
   get("name").value = card.name;
   for (const field of settings) field.value = card.settings[field.dataset.setting];
+  for (const radio of methodRadios) radio.checked = radio.value === card.settings.method;
+  applyMethodUI();
   get("probe-x").max = card.width - 1;
   get("probe-y").max = card.height - 1;
   get("probe-x").value = state.probe?.x ?? Math.round((card.settings.left+card.settings.right)/2);
@@ -151,9 +204,18 @@ function show() {
   const reading = result.reading;
   get("cover-value").textContent = reading.percentage.toFixed(2);
   get("cover-unit").textContent = "%";
-  get("measurement-state").textContent = reading.dark_px + " 个暗像素";
+  const noun = reading.method === "reference" ? "个阴影像素" : "个暗像素";
+  get("measurement-state").textContent = reading.dark_px + " " + noun;
   get("selected-level").textContent = reading.area_mm2.toFixed(2) + " mm² · 原片第 " + result.row + " 行" +
     (result.profile.length ? "" : " · 读数行在框外");
+  if (reading.method === "reference") {
+    get("pending-line").hidden = false;
+    get("pending-line").textContent = "待核 " + reading.pending_px + " px（参照条像素不足的列，未计入分母）· 有证据 " +
+      reading.evidence_px + " / " + reading.total_px + " px";
+  } else {
+    get("pending-line").hidden = true;
+    get("pending-line").textContent = "";
+  }
   for (const [id, filename] of Object.entries({proof: "proof.png", csv: "profile.csv", zip: "observation.zip"})) {
     get(id).href = "/shadowslate" + route("/export/" + filename) + savedQuery();
   }
@@ -229,6 +291,7 @@ get("calibration").addEventListener("submit", (event) => {
   event.preventDefault();
   action(async () => {
     const fields = Object.fromEntries(settings.map((field) => [field.dataset.setting, Number(field.value)]));
+    fields.method = currentMethod();
     const card = await api(route(""), {
       method: "PATCH", headers: {"Content-Type": "application/json"},
       body: JSON.stringify({revision: state.card.revision, name: get("name").value, settings: fields}),
@@ -237,6 +300,7 @@ get("calibration").addEventListener("submit", (event) => {
     await library();
   });
 });
+methodRadios.forEach((radio) => radio.addEventListener("change", applyMethodUI));
 get("prepare").addEventListener("click", () => action(async () => {
   const {url} = await api(route("/prepare") + savedQuery(), {method: "POST"});
   location.assign(url);

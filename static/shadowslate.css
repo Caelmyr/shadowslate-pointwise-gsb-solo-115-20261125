@@ -65,6 +65,11 @@ h2 { font-size: 15px; font-weight: 700; }
 .settings input, dialog input { width: 100%; min-width: 0; padding: 5px 7px; min-height: 33px; }
 .settings fieldset { padding: 8px 0 0; border: 0; border-top: 1px solid var(--line); }
 .form-grid { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 8px; }
+.method-grid { grid-template-columns: repeat(2,minmax(0,1fr)); }
+.settings label.choice { display: flex; flex-direction: row; align-items: center; gap: 6px; font-size: 13px; color: var(--green); }
+.settings label.choice input { width: auto; min-height: 0; }
+.field-hint { margin: 0 15px 12px; padding: 8px 10px; font-size: 11px; line-height: 1.55; color: var(--muted); background: #f3ecf3; border-radius: 5px; }
+.pending-line { color: #b07a35 !important; font-size: 12px; }
 .settings > button { width: calc(100% - 30px); }
 .outputs > div:nth-child(2) { display: flex; flex-wrap: wrap; gap: 8px 13px; font-size: 12px; color: var(--accent); }
 .outputs > button { font-size: 12px; }
