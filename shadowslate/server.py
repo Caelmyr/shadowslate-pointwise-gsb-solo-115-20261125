@@ -9,7 +9,7 @@ from flask import Blueprint, jsonify, render_template, request, send_file, url_f
 from image_lab import create_app as preparation_app
 from image_lab.validation import Invalid, integer, object_value
 
-from . import exports, reading
+from . import exports, pairing, reading
 from .store import Cards
 
 
@@ -48,6 +48,43 @@ def create_app(directory=None):
     @api.post("/practice")
     def practice():
         return jsonify(cards.demo()), 201
+
+    @api.post("/practice-pair")
+    def practice_pair():
+        first, second = cards.demo_pair()
+        return jsonify(card_a=first, card_b=second), 201
+
+    def pair_context(key, peer_key):
+        if key == peer_key:
+            raise Invalid("双卡对照需要选择另一张已存投影卡")
+        card_a, card_b = cards.read(key, request.args.get("revision")), cards.read(peer_key)
+        if card_a["height"] != card_b["height"]:
+            raise Invalid("两张原片高度不一致，无法只靠横向错位对照")
+        image_a, image_b = reading.pixels(cards.photo(key)), reading.pixels(cards.photo(peer_key))
+        return card_a, card_b, image_a, image_b, pairing.analyze(image_a, card_a["settings"],
+                                                                 image_b, card_b["settings"])
+
+    @api.get("/cards/<key>/pair/<peer_key>")
+    def pair_analysis(key, peer_key):
+        card_a, card_b, _, _, result = pair_context(key, peer_key)
+        return jsonify(revision=card_a["revision"], peer_revision=card_b["revision"],
+                       card_a={"id": card_a["id"], "name": card_a["name"]},
+                       card_b={"id": card_b["id"], "name": card_b["name"]}, **result)
+
+    @api.get("/cards/<key>/pair/<peer_key>/probe")
+    def pair_probe(key, peer_key):
+        card_a, card_b, image_a, image_b, result = pair_context(key, peer_key)
+        shift = result["registration"]["shift"]
+        x = integer(request.args.get("x"), "X", 0, card_a["width"] - 1)
+        y = integer(request.args.get("y"), "Y", 0, card_a["height"] - 1)
+        return jsonify(pairing.paired_point(image_a, card_a["settings"], image_b,
+                                            card_b["settings"], shift, x, y))
+
+    @api.get("/cards/<key>/pair/<peer_key>/proof.png")
+    def pair_proof(key, peer_key):
+        card_a, card_b, image_a, image_b, result = pair_context(key, peer_key)
+        return download(pairing.proof(image_a, image_b, card_a, card_b, result),
+                        "image/png", "common-dark-proof.png")
 
     @api.route("/cards/<key>", methods=["GET", "PATCH"])
     def card(key):

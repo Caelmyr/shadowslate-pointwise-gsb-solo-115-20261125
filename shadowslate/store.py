@@ -63,6 +63,14 @@ class Cards:
         size, image, config = reading.practice()
         return self.create("练习 · 桌面投影", "合成桌面.png", size, image, config, synthetic=True)
 
+    def demo_pair(self):
+        from . import pairing
+
+        (size, image_a, cfg_a), (_, image_b, cfg_b) = pairing.practice_pair()
+        first = self.create("练习 · 双灯 A", "合成桌面-A.png", size, image_a, cfg_a, synthetic=True)
+        second = self.create("练习 · 双灯 B", "合成桌面-B.png", size, image_b, cfg_b, synthetic=True)
+        return first, second
+
     def update(self, key, value):
         with self.lock:
             card = self.read(key, integer(value.get("revision"), "工作版本", 1))

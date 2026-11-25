@@ -18,6 +18,7 @@
     <div><h1>桌面投影检查</h1><p>在原片圈出桌面投影，核查暗区覆盖和同一行的实拍亮度。</p></div>
     <div class="top-actions">
       <button id="practice" class="primary" type="button">打开练习投影</button>
+      <button id="practice-pair" type="button">双灯练习对</button>
       <button id="open-import" type="button">导入原片</button>
     </div>
   </section>
@@ -26,6 +27,18 @@
     <label for="library">投影卡</label>
     <select id="library"><option value="">选取已存卡片</option></select>
     <span id="origin"></span>
+  </section>
+  <section id="pair-bar" class="pair-bar" hidden>
+    <form id="pair-form">
+      <label for="pair-library">同桌面另一张投影卡
+        <select id="pair-library" required><option value="">选取已存对照卡</option></select>
+      </label>
+      <button id="pair-run" type="submit">建立双卡对照</button>
+      <button id="pair-clear" type="button">清除对照</button>
+    </form>
+    <a id="pair-proof" class="pair-proof" download hidden>共同暗区 PNG 校样 ↓</a>
+    <div id="pair-summary" class="pair-summary" hidden></div>
+    <p id="pair-notice" class="notice" role="status" hidden></p>
   </section>
   <section id="empty" class="empty">
     <div class="empty-shadow" aria-hidden="true"><i></i></div>
@@ -49,6 +62,7 @@
             <label>Y <input id="probe-y" type="number" min="0" step="1" required></label>
             <button type="submit">读取</button></form>
           <span id="probe-result">选择原片像素</span>
+          <span id="pair-probe-result" class="pair-probe" hidden></span>
         </div>
       </section>
       <section class="panel profile">

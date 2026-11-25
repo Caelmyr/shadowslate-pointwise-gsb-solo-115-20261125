@@ -1,7 +1,8 @@
 "use strict";
 
 const get = (id) => document.getElementById(id);
-const state = {card: null, result: null, photo: null, probe: null, mode: "probe", busy: false};
+const state = {card: null, result: null, photo: null, probe: null, mode: "probe", busy: false,
+               pair: null, pairResult: null, pairProbe: null};
 const settings = [...document.querySelectorAll("[data-setting]")];
 
 async function api(path, options) {
@@ -46,6 +47,24 @@ async function library() {
   select.replaceChildren(new Option("选取已存卡片", ""));
   for (const card of cards) select.append(new Option(card.name, card.id));
   select.value = state.card?.id || "";
+  const pairSelect = get("pair-library");
+  pairSelect.replaceChildren(new Option("选取已存对照卡", ""));
+  for (const card of cards) {
+    if (card.id !== state.card?.id) pairSelect.append(new Option(card.name, card.id));
+  }
+  pairSelect.value = state.pair?.id || "";
+}
+
+function clearPair() {
+  state.pair = null;
+  state.pairResult = null;
+  state.pairProbe = null;
+  get("pair-bar").hidden = true;
+  get("pair-summary").hidden = true;
+  get("pair-proof").hidden = true;
+  get("pair-notice").hidden = true;
+  get("pair-probe-result").hidden = true;
+  paintSource();
 }
 
 function paintSource() {
@@ -78,9 +97,25 @@ function paintSource() {
     ctx.lineTo(right,result.row);
     ctx.stroke();
   }
+  if (state.pairResult) {
+    const common = state.pairResult.common;
+    const ov = common.overlap;
+    ctx.fillStyle = "rgba(216,91,62,0.55)";
+    for (const [y, x0, x1] of common.ranges) ctx.fillRect(x0, y, x1 - x0 + 1, 1);
+    ctx.strokeStyle = "rgba(215,162,95,0.95)";
+    ctx.lineWidth = 1;
+    ctx.setLineDash([4, 3]);
+    ctx.strokeRect(ov.x0, ov.y0 - 8, ov.x1 - ov.x0, 8);
+    ctx.strokeRect(ov.x0, ov.y1 + 1, ov.x1 - ov.x0, 8);
+    ctx.setLineDash([]);
+  }
   if (probe) {
     ctx.strokeStyle = "#30393b";
     ctx.strokeRect(probe.x - 5, probe.y - 5, 10, 10);
+  }
+  if (state.pairProbe && state.pairProbe.peer) {
+    ctx.strokeStyle = "#245c54";
+    ctx.strokeRect(state.pairProbe.peer.x - 5, state.pairProbe.peer.y - 5, 10, 10);
   }
 }
 
@@ -134,6 +169,43 @@ function pointLabel(point) {
     " · " + point.brightness.toFixed(1) + " · " + kind;
 }
 
+function darkWord(value) {
+  return value === null ? "留待核" : (value ? "暗" : "亮");
+}
+
+function pairLabel(sample) {
+  if (!sample) return "";
+  if (!sample.peer) return "另一张对应位置：图外无真实像素，留待核";
+  const here = sample.here, peer = sample.peer;
+  const head = "另一张真实坐标 (" + peer.x + ", " + peer.y + ") · RGB " + peer.rgb.join("/") +
+    " · " + peer.brightness.toFixed(1) + " · " + darkWord(peer.dark);
+  if (sample.pending) return head + " · " + (sample.reason || "缺一边，暗亮留待核");
+  const verdict = sample.common_dark ? "两次都暗" : "非两次都暗（本张" + darkWord(here.dark) +
+    " / 对照" + darkWord(peer.dark) + "）";
+  return head + " · 本张" + darkWord(here.dark) + " → " + verdict;
+}
+
+function showPairSummary() {
+  const {pairResult, pair} = state;
+  if (!pairResult) return;
+  const reg = pairResult.registration;
+  const common = pairResult.common;
+  const ov = common.overlap;
+  get("pair-summary").hidden = false;
+  get("pair-summary").innerHTML =
+    "<b>" + pair.name + "</b> · 横移 <b>" + (reg.shift >= 0 ? "+" : "") + reg.shift +
+    " px</b>（允许 ±12 整数）<br>" +
+    "上参照 SAD " + reg.chosen.top_sad + " · 下参照 SAD " + reg.chosen.bottom_sad +
+    " · 综合 " + reg.chosen.score +
+    (reg.best_shift !== reg.shift ? "<br>纹理在多个位置相近，按上下实见贴合且最少移动选用" : "") +
+    "<br>共同暗区 <b>" + common.dark_px + "</b> px / " + common.percentage.toFixed(2) +
+    "% · 重合 " + common.total_px + " px（X " + ov.x0 + "–" + ov.x1 + "，Y " + ov.y0 + "–" + ov.y1 + "）";
+  const proof = get("pair-proof");
+  proof.hidden = false;
+  proof.href = "/shadowslate/cards/" + state.card.id + "/pair/" + pair.id +
+    "/proof.png?revision=" + state.card.revision;
+}
+
 function show() {
   const {card, result} = state;
   get("workspace").hidden = false;
@@ -157,6 +229,7 @@ function show() {
   for (const [id, filename] of Object.entries({proof: "proof.png", csv: "profile.csv", zip: "observation.zip"})) {
     get(id).href = "/shadowslate" + route("/export/" + filename) + savedQuery();
   }
+  get("pair-bar").hidden = false;
   paintSource();
   paintChart();
 }
@@ -166,8 +239,14 @@ async function open(card) {
   const photo = new Image();
   photo.src = "/shadowslate" + base + "/capture.png";
   const [result] = await Promise.all([api(base + "/measurement?revision=" + card.revision), photo.decode()]);
-  Object.assign(state, {card, result, photo, probe: null});
+  Object.assign(state, {card, result, photo, probe: null, pair: null, pairResult: null, pairProbe: null});
+  get("pair-summary").hidden = true;
+  get("pair-proof").hidden = true;
+  get("pair-notice").hidden = true;
+  get("pair-probe-result").hidden = true;
   get("library").value = card.id;
+  await library();
+  get("pair-bar").hidden = false;
   show();
 }
 
@@ -176,12 +255,30 @@ async function probe(x, y) {
   get("probe-x").value = x;
   get("probe-y").value = y;
   get("probe-result").textContent = pointLabel(state.probe);
+  const pairNode = get("pair-probe-result");
+  if (state.pairResult) {
+    state.pairProbe = await api("/cards/" + state.card.id + "/pair/" + state.pair.id +
+      "/probe?revision=" + state.card.revision + "&x=" + x + "&y=" + y);
+    pairNode.hidden = false;
+    pairNode.textContent = pairLabel(state.pairProbe);
+    pairNode.classList.toggle("pending", state.pairProbe.pending);
+  } else {
+    state.pairProbe = null;
+    pairNode.hidden = true;
+  }
   paintSource();
 }
 
 get("practice").addEventListener("click", () => action(async () => {
   await open(await api("/practice", {method: "POST"}));
   await library();
+}));
+
+get("practice-pair").addEventListener("click", () => action(async () => {
+  const {card_a, card_b} = await api("/practice-pair", {method: "POST"});
+  await open(card_a);
+  await library();
+  get("pair-library").value = card_b.id;
 }));
 
 get("library").addEventListener("change", () => {
@@ -241,4 +338,24 @@ get("prepare").addEventListener("click", () => action(async () => {
   const {url} = await api(route("/prepare") + savedQuery(), {method: "POST"});
   location.assign(url);
 }));
+get("pair-form").addEventListener("submit", (event) => {
+  event.preventDefault();
+  action(async () => {
+    const peerId = get("pair-library").value;
+    if (!peerId) {
+      notice("请先选择另一张已存投影卡。", "pair-notice");
+      return;
+    }
+    const pairResult = await api("/cards/" + state.card.id + "/pair/" + peerId +
+      "?revision=" + state.card.revision);
+    const {cards} = await api("/cards");
+    state.pair = cards.find((item) => item.id === peerId);
+    state.pairResult = pairResult;
+    state.pairProbe = null;
+    get("pair-notice").hidden = true;
+    showPairSummary();
+    paintSource();
+  }, "pair-notice");
+});
+get("pair-clear").addEventListener("click", () => clearPair());
 action(library);
