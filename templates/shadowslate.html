@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ShadowSlate · 实拍投影台</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='shadowslate.css') }}">
+  <script defer src="{{ url_for('static', filename='shadowslate.js') }}"></script>
+</head>
+<body>
+<header class="masthead">
+  <a class="brand" href="/"><i aria-hidden="true"></i> ShadowSlate</a>
+  <span class="mast-label">实拍投影台</span>
+  <a class="external" href="/prepare">照片准备 ↗</a>
+</header>
+<main>
+  <section class="introduction">
+    <div><h1>桌面投影检查</h1><p>在原片圈出桌面投影，核查暗区覆盖和同一行的实拍亮度。</p></div>
+    <div class="top-actions">
+      <button id="practice" class="primary" type="button">打开练习投影</button>
+      <button id="open-import" type="button">导入原片</button>
+    </div>
+  </section>
+  <p id="notice" class="notice" role="status" hidden></p>
+  <section class="library">
+    <label for="library">投影卡</label>
+    <select id="library"><option value="">选取已存卡片</option></select>
+    <span id="origin"></span>
+  </section>
+  <section id="empty" class="empty">
+    <div class="empty-shadow" aria-hidden="true"><i></i></div>
+    <h2>选择一张桌面投影原照</h2>
+    <p>使用保留实际桌面和投影的照片，尽量把投影物体放在测量框外。</p>
+  </section>
+  <section id="workspace" class="workspace" hidden>
+    <div class="left">
+      <section class="panel source">
+        <div class="panel-head">
+          <div><h2 id="card-title">原片</h2><span id="dimensions"></span></div>
+          <div class="modes" role="group" aria-label="原片投影模式">
+            <button id="probe-mode" data-mode="probe" aria-pressed="true" type="button">点读</button>
+            <button id="mark-mode" data-mode="mark" aria-pressed="false" type="button">取读数行</button>
+          </div>
+        </div>
+        <div class="camera"><canvas id="capture" aria-label="投影原照，可点击取样或输入原片像素坐标"></canvas></div>
+        <div class="probe">
+          <b>原片点读</b>
+          <form id="probe-form"><label>X <input id="probe-x" type="number" min="0" step="1" required></label>
+            <label>Y <input id="probe-y" type="number" min="0" step="1" required></label>
+            <button type="submit">读取</button></form>
+          <span id="probe-result">选择原片像素</span>
+        </div>
+      </section>
+      <section class="panel profile">
+        <div class="panel-head">
+          <div><h2>原片亮度截线</h2><span>原片 X · px</span></div>
+          <span class="legend"><i></i> 暗区阈值</span>
+        </div>
+        <canvas id="chart" width="850" height="166" aria-label="当前截线的实际像素亮度"></canvas>
+      </section>
+    </div>
+    <aside class="right">
+      <section class="panel readout">
+        <div class="panel-head"><h2>框内暗区覆盖</h2><span id="measurement-state"></span></div>
+        <div class="volume"><strong id="cover-value">—</strong><span id="cover-unit"></span></div>
+        <p id="selected-level"></p>
+      </section>
+      <form id="calibration" class="panel settings">
+        <div class="panel-head"><div><h2>测量框和标尺</h2><span>坐标使用原片像素，X 向右，Y 向下</span></div></div>
+        <label class="wide">卡片名称<input id="name" maxlength="80" required></label>
+        <fieldset><legend>原片测量框 · px</legend><div class="form-grid">
+          <label>左界 X<input data-setting="left" type="number" step="1" min="0" required></label>
+          <label>右界 X<input data-setting="right" type="number" step="1" min="0" required></label>
+          <label>读数行 Y<input data-setting="row" type="number" step="1" min="0" required></label>
+          <label>上界 Y<input data-setting="top" type="number" step="1" min="0" required></label>
+          <label>下界 Y<input data-setting="bottom" type="number" step="1" min="0" required></label>
+        </div></fieldset>
+        <fieldset><legend>亮度和比例</legend><div class="form-grid">
+          <label>暗区亮度上限<input data-setting="cutoff" type="number" step="1" min="1" max="254" required></label>
+          <label>标尺 mm/px<input data-setting="mm_per_px" type="number" step="any" min="0.001" required></label>
+        </div></fieldset>
+        <button id="save" class="primary" type="submit">保存并测量</button>
+      </form>
+      <section class="panel outputs">
+        <div class="panel-head"><h2>投影交接</h2></div>
+        <div><a id="proof" download>PNG 校样 ↓</a><a id="csv" download>CSV 读数 ↓</a><a id="zip" download>ZIP 投影卡 ↓</a></div>
+        <button id="prepare" type="button">将原片送入照片准备 ↗</button>
+      </section>
+    </aside>
+  </section>
+</main>
+<dialog id="import">
+  <form id="upload">
+    <h2>导入投影原照</h2>
+    <label>投影卡名称<input name="name" maxlength="80" required></label>
+    <label>照片<input name="photo" type="file" accept="image/png,image/jpeg,image/webp,image/bmp,image/tiff" required></label>
+    <p id="import-notice" role="status"></p>
+    <div class="top-actions"><button id="cancel-import" type="button">取消</button><button class="primary" type="submit">建立投影卡</button></div>
+  </form>
+</dialog>
+</body>
+</html>

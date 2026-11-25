@@ -1,0 +1,16 @@
+name: solo118-shadowslate
+services:
+  desk:
+    build:
+      context: .
+      args:
+        SHADOWSLATE_DEPS_IMAGE: ${SHADOWSLATE_DEPS_IMAGE:-python:3.11-slim}
+    image: ${SHADOWSLATE_IMAGE:-solo118-shadowslate:1.0}
+    network_mode: bridge
+    ports:
+      - "127.0.0.1:${SHADOWSLATE_PORT:-19918}:8000"
+    volumes:
+      - measurements:/var/lib/shadowslate
+    init: true
+volumes:
+  measurements:
