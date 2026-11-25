@@ -80,3 +80,9 @@ dialog .top-actions { justify-content: end; }
 #import-notice { color: var(--accent); font-size: 13px; }
 @media (max-width: 880px) { .workspace { grid-template-columns: minmax(0,1fr) minmax(260px,295px); } }
 @media (max-width: 700px) { .workspace { grid-template-columns: 1fr; } .introduction { align-items: start; flex-direction: column; } }
+.edge-result { padding: 4px 15px 14px; font-size: 12px; color: var(--muted); display: grid; gap: 5px; }
+.edge-result b { color: var(--green); font-variant-numeric: tabular-nums; }
+.edge-result.pending b { color: #9a5b3d; }
+.edge-result .ends { font: 11px/1.65 "Aptos Mono", ui-monospace, monospace; }
+.edge-result .note { color: #9a5b3d; }
+.edge .panel-head button { min-height: 28px; padding: 3px 8px; font-size: 12px; }

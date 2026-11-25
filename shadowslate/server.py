@@ -73,7 +73,16 @@ def create_app(directory=None):
         card = cards.read(key, request.args.get("revision"))
         x = integer(request.args.get("x"), "X", 0, card["width"] - 1)
         y = integer(request.args.get("y"), "Y", 0, card["height"] - 1)
-        return jsonify(reading.point(reading.pixels(cards.photo(key)), x, y, card["settings"]))
+        image = reading.pixels(cards.photo(key))
+        return jsonify(reading.point(image, x, y, card["settings"], reading.transition(image, card["settings"])))
+
+    @api.get("/cards/<key>/edge")
+    def edge(key):
+        card = cards.read(key, request.args.get("revision"))
+        x = integer(request.args.get("x"), "影边 X", 0, card["width"] - 1)
+        y = integer(request.args.get("y"), "影边 Y", 0, card["height"] - 1)
+        return jsonify(reading.transition(reading.pixels(cards.photo(key)),
+                                          {**card["settings"], "edge": {"x": x, "y": y}}))
 
     @api.get("/cards/<key>/export/profile.csv")
     def profile(key):

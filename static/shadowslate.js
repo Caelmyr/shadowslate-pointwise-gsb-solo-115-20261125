@@ -37,6 +37,7 @@ async function action(work, target = "notice") {
   } finally {
     state.busy = false;
     document.querySelectorAll("button, select").forEach((node) => { node.disabled = false; });
+    if (state.result) paintEdge();
   }
 }
 
@@ -46,6 +47,10 @@ async function library() {
   select.replaceChildren(new Option("选取已存卡片", ""));
   for (const card of cards) select.append(new Option(card.name, card.id));
   select.value = state.card?.id || "";
+}
+
+function displayEdge() {
+  return state.previewEdge || state.result?.edge || null;
 }
 
 function paintSource() {
@@ -58,6 +63,7 @@ function paintSource() {
   ctx.drawImage(photo, 0, 0);
   const cfg = card.settings;
   const {result} = state;
+  const edge = displayEdge();
   ctx.lineWidth = 2;
   ctx.strokeStyle = "#7e537f";
   ctx.setLineDash([6,5]);
@@ -78,8 +84,36 @@ function paintSource() {
     ctx.lineTo(right,result.row);
     ctx.stroke();
   }
+  if (edge?.spread) {
+    const {start, end} = edge.spread;
+    const y = edge.y;
+    ctx.strokeStyle = "#2f8574";
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.moveTo(start,y);
+    ctx.lineTo(end,y);
+    ctx.stroke();
+    for (const endX of [start, end]) {
+      ctx.beginPath();
+      ctx.moveTo(endX,y-9);
+      ctx.lineTo(endX,y+9);
+      ctx.stroke();
+    }
+  }
+  if (edge?.x !== null && edge?.x !== undefined) {
+    ctx.strokeStyle = "#c9efe3";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(edge.x, edge.y-11);
+    ctx.lineTo(edge.x+11, edge.y);
+    ctx.lineTo(edge.x, edge.y+11);
+    ctx.lineTo(edge.x-11, edge.y);
+    ctx.closePath();
+    ctx.stroke();
+  }
   if (probe) {
     ctx.strokeStyle = "#30393b";
+    ctx.lineWidth = 2;
     ctx.strokeRect(probe.x - 5, probe.y - 5, 10, 10);
   }
 }
@@ -126,12 +160,82 @@ function paintChart() {
   ctx.lineTo(xAt(cfg.right),yAt(cfg.cutoff));
   ctx.stroke();
   ctx.setLineDash([]);
+  const edge = displayEdge();
+  if (edge?.spread && edge.y === result.row) {
+    ctx.fillStyle = "#2f8574";
+    for (const level of [edge.spread.low_level, edge.spread.high_level]) {
+      ctx.fillRect(xAt(cfg.left),yAt(level)-1,width-76,2);
+    }
+    ctx.strokeStyle = "#2f8574";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(xAt(edge.spread.start),yAt(255));
+    ctx.lineTo(xAt(edge.spread.start),yAt(0));
+    ctx.moveTo(xAt(edge.spread.end),yAt(255));
+    ctx.lineTo(xAt(edge.spread.end),yAt(0));
+    ctx.stroke();
+    ctx.font = "12px monospace";
+    ctx.fillStyle = "#246d5f";
+    ctx.fillText(edge.spread.start.toFixed(2), xAt(edge.spread.start)-10, yAt(255)+14);
+    ctx.fillText(edge.spread.end.toFixed(2), xAt(edge.spread.end)+4, yAt(255)+14);
+  }
 }
 
 function pointLabel(point) {
   const kind = point.dark === null ? "框外" : (point.dark ? "暗区" : "亮区");
-  return "(" + point.x + ", " + point.y + ") · RGB " + point.rgb.join("/") +
+  let text = "(" + point.x + ", " + point.y + ") · RGB " + point.rgb.join("/") +
     " · " + point.brightness.toFixed(1) + " · " + kind;
+  const edge = point.edge;
+  if (edge && edge.row_applies) {
+    text += edge.position
+      ? " · 本次过渡·" + edge.position
+      : " · " + (edge.note || "本次过渡待核");
+  } else if (edge && edge.x !== null && edge.x !== undefined) {
+    text += " · " + (edge.note || ("本次影边在第 " + edge.y + " 行，本行不套用"));
+  }
+  return text;
+}
+
+function edgeText(edge) {
+  if (!edge || edge.x === null || edge.x === undefined) return "尚未点取影边位置";
+  const head = "影边点 (" + edge.x + ", " + edge.y + ")";
+  if (edge.status !== "ok") return head + " · " + (edge.note || "待核");
+  const spread = edge.spread;
+  const dark = edge.dark;
+  const light = edge.light;
+  const order = spread.dark_left ? "暗端 → 亮端" : "亮端 → 暗端";
+  return [head + " · 过渡 " + spread.width_px.toFixed(2) + " px / " + spread.width_mm.toFixed(2) +
+    " mm（" + order + "）",
+    "暗端 " + dark.left + "–" + dark.right + " px · " + dark.pixels + " 像素 · " +
+    dark.brightness.toFixed(1) + " · 端内最亮−最暗 " + dark.spread.toFixed(1),
+    "亮端 " + light.left + "–" + light.right + " px · " + light.pixels + " 像素 · " +
+    light.brightness.toFixed(1) + " · 端内最亮−最暗 " + light.spread.toFixed(1),
+    "10% " + spread.low_level.toFixed(1) + " → X " + spread.start.toFixed(2) +
+    " · 90% " + spread.high_level.toFixed(1) + " → X " + spread.end.toFixed(2),
+    "只在相邻原片像素夹住处读取，不朝画外推"].join("\n");
+}
+
+function edgeCell(line) {
+  const row = document.createElement("span");
+  if (line.includes("待核")) row.className = "note";
+  row.textContent = line;
+  return row;
+}
+
+function paintEdge() {
+  const edge = displayEdge();
+  const target = get("edge-result");
+  target.replaceChildren();
+  target.classList.toggle("pending", !edge || edge.status !== "ok");
+  for (const line of edgeText(edge).split("\n")) target.append(edgeCell(line));
+  get("edge-head").textContent = edge?.spread
+    ? "本次过渡 " + edge.spread.width_mm.toFixed(2) + " mm · 第 " + edge.y + " 行"
+    : "左右各32列内取实际端";
+  const adopted = state.result?.edge;
+  const hasAdopted = adopted?.x !== null && adopted?.x !== undefined;
+  get("adopt-edge").hidden = !edge?.spread;
+  get("adopt-edge").disabled = !edge?.spread || (hasAdopted && edge.x === adopted.x && edge.y === adopted.y);
+  get("clear-edge").disabled = !hasAdopted;
 }
 
 function show() {
@@ -159,6 +263,7 @@ function show() {
   }
   paintSource();
   paintChart();
+  paintEdge();
 }
 
 async function open(card) {
@@ -166,10 +271,40 @@ async function open(card) {
   const photo = new Image();
   photo.src = "/shadowslate" + base + "/capture.png";
   const [result] = await Promise.all([api(base + "/measurement?revision=" + card.revision), photo.decode()]);
-  Object.assign(state, {card, result, photo, probe: null});
+  Object.assign(state, {card, result, photo, probe: null, previewEdge: null});
   get("library").value = card.id;
   show();
 }
+
+async function patchSettings(settings) {
+  return api(route(""), {
+    method: "PATCH", headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({revision: state.card.revision, name: state.card.name, settings}),
+  });
+}
+
+async function saveSettings() {
+  const fields = Object.fromEntries(settings.map((field) => [field.dataset.setting, Number(field.value)]));
+  return api(route(""), {
+    method: "PATCH", headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({revision: state.card.revision, name: get("name").value, settings: fields}),
+  });
+}
+
+get("adopt-edge").addEventListener("click", () => action(async () => {
+  const edge = displayEdge();
+  if (!edge?.spread) return;
+  const card = await patchSettings({edge: {x: edge.x, y: edge.y}});
+  await open(card);
+  await library();
+  notice("已采用影边；截线标出这两个坐标，其他原片行不套用本次读数。");
+}));
+get("clear-edge").addEventListener("click", () => action(async () => {
+  const card = await patchSettings({edge: null});
+  await open(card);
+  await library();
+  notice("已清除影边，原覆盖比例不变。");
+}));
 
 async function probe(x, y) {
   state.probe = await api(route("/probe") + savedQuery() + "&x=" + x + "&y=" + y);
@@ -214,6 +349,16 @@ get("capture").addEventListener("click", (event) => {
   const x = Math.max(0, Math.min(canvas.width - 1, Math.floor((event.clientX - rect.left) * canvas.width / rect.width)));
   const y = Math.max(0, Math.min(canvas.height - 1, Math.floor((event.clientY - rect.top) * canvas.height / rect.height)));
   action(async () => {
+    if (state.mode === "edge") {
+      const edge = await api(route("/edge") + savedQuery() + "&x=" + x + "&y=" + state.result.row);
+      state.previewEdge = edge;
+      paintSource();
+      paintEdge();
+      notice(edge.status === "ok"
+        ? "影边过渡已读取，可在「影边过渡区」核对后采用。"
+        : (edge.note || "影边过渡待核。"));
+      return;
+    }
     await probe(x, y);
     if (state.mode === "mark") {
       settings.find((field) => field.dataset.setting === "row").value = y;
@@ -228,11 +373,7 @@ get("probe-form").addEventListener("submit", (event) => {
 get("calibration").addEventListener("submit", (event) => {
   event.preventDefault();
   action(async () => {
-    const fields = Object.fromEntries(settings.map((field) => [field.dataset.setting, Number(field.value)]));
-    const card = await api(route(""), {
-      method: "PATCH", headers: {"Content-Type": "application/json"},
-      body: JSON.stringify({revision: state.card.revision, name: get("name").value, settings: fields}),
-    });
+    const card = await saveSettings();
     await open(card);
     await library();
   });

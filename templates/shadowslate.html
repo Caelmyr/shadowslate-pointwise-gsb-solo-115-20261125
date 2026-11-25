@@ -40,6 +40,7 @@
           <div class="modes" role="group" aria-label="原片投影模式">
             <button id="probe-mode" data-mode="probe" aria-pressed="true" type="button">点读</button>
             <button id="mark-mode" data-mode="mark" aria-pressed="false" type="button">取读数行</button>
+            <button id="edge-mode" data-mode="edge" aria-pressed="false" type="button">取影边</button>
           </div>
         </div>
         <div class="camera"><canvas id="capture" aria-label="投影原照，可点击取样或输入原片像素坐标"></canvas></div>
@@ -50,6 +51,14 @@
             <button type="submit">读取</button></form>
           <span id="probe-result">选择原片像素</span>
         </div>
+      </section>
+      <section class="panel edge">
+        <div class="panel-head">
+          <div><h2>影边过渡区</h2><span id="edge-head">左右各32列内取实际端</span></div>
+          <div class="modes"><button id="adopt-edge" type="button">采用影边</button>
+            <button id="clear-edge" type="button">清除影边</button></div>
+        </div>
+        <div id="edge-result" class="edge-result">尚未点取影边位置</div>
       </section>
       <section class="panel profile">
         <div class="panel-head">
